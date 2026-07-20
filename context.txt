@@ -1,0 +1,33 @@
+PROD_ROLE = "arn:aws:iam::811261691581:role/Glue-role-2d766430"
+PROD_BUCKET = "aws-glue-assets-811261691581-us-east-1"
+
+
+def create_config(source, job):
+    args = source.get("defaultArguments", {}).copy()
+
+    args["--spark-event-logs-path"] = (
+        f"s3://{PROD_BUCKET}/sparkHistoryLogs/"
+    )
+    args["--TempDir"] = f"s3://{PROD_BUCKET}/temporary/"
+
+    return {
+        "Role": PROD_ROLE,
+        "Description": source.get("description", ""),
+        "ExecutionProperty": {
+            "MaxConcurrentRuns":
+                source["executionProperty"]["maxConcurrentRuns"]
+        },
+        "Command": {
+            "Name": source["command"]["name"],
+            "ScriptLocation":
+                f"s3://{PROD_BUCKET}/scripts/{job}.py",
+            "PythonVersion": source["command"]["pythonVersion"]
+        },
+        "DefaultArguments": args,
+        "MaxRetries": source["maxRetries"],
+        "Timeout": source["timeout"],
+        "GlueVersion": source["glueVersion"],
+        "WorkerType": source["workerType"],
+        "NumberOfWorkers": source["numberOfWorkers"],
+        "ExecutionClass": source["executionClass"]
+    }

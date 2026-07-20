@@ -1,0 +1,40 @@
+import json
+from pathlib import Path
+
+import boto3
+
+from glue_config import PROD_BUCKET, create_config
+
+s3 = boto3.client("s3", region_name="us-east-1")
+glue = boto3.client("glue", region_name="us-east-1")
+
+jobs = [
+    line.strip()
+    for line in Path("deployment-jobs.txt").read_text().splitlines()
+    if line.strip() and not line.strip().startswith("#")
+]
+
+if not jobs:
+    raise ValueError("No jobs found in deployment-jobs.txt")
+
+for job in jobs:
+    script = Path(job) / f"{job}.py"
+    config_file = Path(job) / f"{job}.json"
+
+    if not script.exists() or not config_file.exists():
+        raise FileNotFoundError(f"Missing files for {job}")
+
+    source = json.loads(config_file.read_text(encoding="utf-8"))
+    config = create_config(source, job)
+
+    s3.upload_file(str(script), PROD_BUCKET, f"scripts/{job}.py")
+
+    try:
+        glue.get_job(JobName=job)
+        glue.update_job(JobName=job, JobUpdate=config)
+        print(f"Updated: {job}")
+    except glue.exceptions.EntityNotFoundException:
+        glue.create_job(Name=job, **config)
+        print(f"Created: {job}")
+
+print("Production deployment completed.")
